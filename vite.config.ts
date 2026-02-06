@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
 
   return {
-    base: "/Special-Edu-Ai",
+    base: "/Special-Edu-Ai/",
 
     server: {
       port: 3000,
