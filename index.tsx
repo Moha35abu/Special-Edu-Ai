@@ -10,7 +10,7 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <BrowserRouter basename={process.env.PUBLIC_URL}>
+    <BrowserRouter basename="/Special-Edu-Ai/">
       <App />
     </BrowserRouter>
   </React.StrictMode>,
