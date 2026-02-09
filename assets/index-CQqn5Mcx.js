@@ -385,7 +385,7 @@ ${S}`)}return d}),qa=gx(_v);/**
 -   عند اللعب معه/معها، حاولوا تسمية الأشياء بألوانها (مثال: "هذه سيارة حمراء").
 -   شجعوه/شجعوها على المشاركة في مهام منزلية بسيطة تتطلب الانتظار، مثل المساعدة في تحضير الطاولة.
 -   احتفلوا بإنجازاته/إنجازاتها الصغيرة مهما كانت، فالتقدير والتشجيع يصنعان فارقًا كبيرًا.
-`,fM="AIzaSyDrbRQTeuEOv6_KRIpPhob0jAxZHUM9HvA",wv=new rM({apiKey:fM}),Iv="gemini-3-flash-preview",dM=async(n,t,o)=>{try{const a=JSON.parse(JSON.stringify(n));delete a.chatHistory,a.personalInfo.photoUrl=void 0,a.medicalDiagnosis.reportFile&&(a.medicalDiagnosis.reportFile=`[تم رفع ملف باسم: ${n.medicalDiagnosis.reportFile.name}]`);const s=n.planHistory.slice(-2).map((y,S)=>`### الخطة السابقة ${S+1} (${new Date(y.createdAt).toLocaleDateString("ar-SA")})
+`,fM="";throw new Error("API_KEY environment variable is not set.");const wv=new rM({apiKey:fM}),Iv="gemini-3-flash-preview",dM=async(n,t,o)=>{try{const a=JSON.parse(JSON.stringify(n));delete a.chatHistory,a.personalInfo.photoUrl=void 0,a.medicalDiagnosis.reportFile&&(a.medicalDiagnosis.reportFile=`[تم رفع ملف باسم: ${n.medicalDiagnosis.reportFile.name}]`);const s=n.planHistory.slice(-2).map((y,S)=>`### الخطة السابقة ${S+1} (${new Date(y.createdAt).toLocaleDateString("ar-SA")})
 
 ${y.content}`).join(`
 
