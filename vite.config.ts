@@ -10,4 +10,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "."),
     },
   },
+
+  define: {
+    "import.meta.env.VITE_GEMINI_API_KEY": JSON.stringify(
+      process.env.NODE_ENV === "production"
+        ? ""
+        : process.env.VITE_GEMINI_API_KEY || "",
+    ),
+  },
 });
