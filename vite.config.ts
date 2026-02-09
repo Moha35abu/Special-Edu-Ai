@@ -15,8 +15,8 @@ export default defineConfig(({ mode }) => {
     },
 
     define: {
-      "import.meta.env.VITE_GEMINI_API_KEY": JSON.stringify(
-        mode === "production" ? "" : env.VITE_GEMINI_API_KEY || "",
+      "import.meta.env.VITE_BACKEND_URL": JSON.stringify(
+        env.VITE_BACKEND_URL || "",
       ),
     },
   };

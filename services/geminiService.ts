@@ -1,21 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import type { Student, ChatMessage, SessionLog } from "../types";
-import {
-  CHAT_ASSISTANT_SYSTEM_PROMPT,
-  REPORT_GENERATOR_SYSTEM_PROMPT,
-} from "../prompts";
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "https://special-edu-api-key.vercel.app";
 
-if (!API_KEY) {
-  throw new Error("API_KEY environment variable is not set.");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-
-const model = "gemini-3-flash-preview";
-
-const fileToGenerativePart = async (file: File) => {
+// Keep the file helper if you need it for frontend processing
+export const fileToGenerativePart = async (file: File) => {
   const base64EncodedData = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
@@ -35,72 +24,59 @@ export const getChatResponse = async (
   student: Student,
   chatHistory: ChatMessage[],
   userMessage: string,
+  file?: File, // Optional file parameter
 ): Promise<string> => {
   try {
-    const studentDataForPrompt = JSON.parse(JSON.stringify(student));
-    // Sanitize large or irrelevant data for the prompt
-    delete studentDataForPrompt.chatHistory;
-    studentDataForPrompt.personalInfo.photoUrl = undefined;
-    if (studentDataForPrompt.medicalDiagnosis.reportFile) {
-      studentDataForPrompt.medicalDiagnosis.reportFile = `[تم رفع ملف باسم: ${student.medicalDiagnosis.reportFile.name}]`;
+    // Prepare file data if provided
+    let fileData = null;
+    if (file) {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      fileData = {
+        base64,
+        type: file.type,
+        name: file.name,
+      };
     }
 
-    // Take the last 2 plans for context to enforce non-repetition rule
-    const recentPlans = student.planHistory
-      .slice(-2)
-      .map(
-        (plan, index) =>
-          `### الخطة السابقة ${index + 1} (${new Date(plan.createdAt).toLocaleDateString("ar-SA")})\n\n${plan.content}`,
-      )
-      .join("\n\n---\n\n");
-
-    const achievedGoalsSummary = student.achievedGoals
-      .map(
-        (g) =>
-          `- ${g.description} (النوع: ${g.goalType}, الإتقان: ${g.masteryLevel}, التاريخ: ${new Date(g.achievedAt).toLocaleDateString("ar-SA")})`,
-      )
-      .join("\n");
-
-    const contextPrompt = `
-${CHAT_ASSISTANT_SYSTEM_PROMPT}
-
-## سياق الطالب الحالي
-
-### بيانات الطالب
-\`\`\`json
-${JSON.stringify(studentDataForPrompt, null, 2)}
-\`\`\`
-
-### سجل الأهداف التي تم تحقيقها (للإطلاع ومنع التكرار)
-${achievedGoalsSummary || "لا توجد أهداف محققة مسجلة بعد."}
-
-
-### ملخص آخر خطتين (إن وجد)
-${recentPlans || "لا توجد خطط سابقة."}
-        `;
-
-    // The entire history is not sent, only a summary. This can be improved.
-    // For now, we will send the last few messages for conversation context.
-    const conversationContext = chatHistory
-      .slice(-6)
-      .map((msg) => `${msg.role}: ${msg.content}`)
-      .join("\n");
-
-    const fullPrompt = `${contextPrompt}\n\n## المحادثة الحالية\n\n${conversationContext}\nuser: ${userMessage}\nmodel: `;
-
-    const response = await ai.models.generateContent({
-      model,
-      contents: fullPrompt,
+    const response = await fetch(`${BACKEND_URL}/api/v1/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student,
+        chatHistory,
+        userMessage,
+        fileData,
+      }),
     });
 
-    if (response.text) {
-      return response.text;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Backend error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      return data.text;
     } else {
-      throw new Error("No text response from Gemini API.");
+      throw new Error(data.error || "Backend returned unsuccessful response");
     }
   } catch (error) {
-    console.error("Error getting chat response from Gemini:", error);
-    throw new Error("Failed to get chat response.");
+    console.error("Error getting chat response from backend:", error);
+
+    // User-friendly error messages
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error(
+        "Cannot connect to the server. Please check your internet connection and try again.",
+      );
+    }
+
+    throw new Error("Failed to get chat response. Please try again later.");
   }
 };
 
@@ -111,46 +87,51 @@ export const generateReport = async (
   endDate: string,
 ): Promise<string> => {
   try {
-    const studentName = student.personalInfo.fullName;
-    const formattedStartDate = new Date(startDate).toLocaleDateString("ar-SA");
-    const formattedEndDate = new Date(endDate).toLocaleDateString("ar-SA");
-
-    const logsForPrompt = logs.map((log) => ({
-      date: log.date,
-      duration: log.duration,
-      notes: log.notes,
-    }));
-
-    const prompt = `
-${REPORT_GENERATOR_SYSTEM_PROMPT.replace(/\$\{studentName\}/g, studentName)}
-
-## بيانات الطالب
-- **الاسم:** ${studentName}
-
-## سجل الجلسات للفترة المحددة
-\`\`\`json
-${JSON.stringify(logsForPrompt, null, 2)}
-\`\`\`
-
-## المطلوب
-بناءً على السجل أعلاه فقط، قم بكتابة "تقرير التقدم" لولي الأمر عن الفترة من ${formattedStartDate} إلى ${formattedEndDate}.
-`;
-
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
+    const response = await fetch(`${BACKEND_URL}/api/v1/generate-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student,
+        logs,
+        startDate,
+        endDate,
+      }),
     });
 
-    if (response.text) {
-      const header = `### **مدرسة الإيمان**\n\n**تقرير التقدم للطالب/ة:** ${studentName}\n**عن الفترة من:** ${formattedStartDate} **إلى:** ${formattedEndDate}\n\n---\n\n`;
-      return header + response.text;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Backend error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success) {
+      return data.text;
     } else {
-      throw new Error(
-        "No text response from Gemini API for report generation.",
-      );
+      throw new Error(data.error || "Backend returned unsuccessful response");
     }
   } catch (error) {
-    console.error("Error generating report from Gemini:", error);
-    throw new Error("Failed to generate report.");
+    console.error("Error generating report from backend:", error);
+
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error(
+        "Cannot connect to the server. Please check your internet connection and try again.",
+      );
+    }
+
+    throw new Error("Failed to generate report. Please try again later.");
+  }
+};
+
+export const checkBackendHealth = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/v1/health`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.status === "healthy";
+    }
+    return false;
+  } catch {
+    return false;
   }
 };
